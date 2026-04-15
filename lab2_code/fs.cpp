@@ -18,11 +18,17 @@ int
 FS::format()
 {
     cout << "FS::format()\n";
-    this->fat[0] = -2;
-    this->fat[1] = -2;
+    this->fat[ROOT_BLOCK] = FAT_EOF;
+    this->fat[FAT_BLOCK] = FAT_EOF;
     for(int i = 2; i < this->disk.get_no_blocks(); i++){
-        this->fat[i] = -1;
+        this->fat[i] = FAT_FREE;
     }
+
+    dir_entry root_array[64];
+
+    this->disk.write(0,reinterpret_cast<uint8_t*>(root_array));
+
+
     return 0;
 }
 
