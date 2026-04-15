@@ -24,10 +24,9 @@ FS::format()
         this->fat[i] = FAT_FREE;
     }
 
-    dir_entry root_array[64];
-
-    this->disk.write(0,reinterpret_cast<uint8_t*>(root_array));
-
+    dir_entry root_array[64] = {0};
+    this->disk.write(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
+    this->disk.write(ROOT_BLOCK,reinterpret_cast<uint8_t*>(root_array));
 
     return 0;
 }
@@ -38,6 +37,7 @@ int
 FS::create(string filepath)
 {
     cout << "FS::create(" << filepath << ")\n";
+    
     return 0;
 }
 
