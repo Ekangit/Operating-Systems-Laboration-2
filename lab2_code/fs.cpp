@@ -1,7 +1,9 @@
 #include <iostream>
 #include "fs.h"
+#include <vector>
 
 using namespace std;
+
 
 FS::FS()
 {
@@ -24,6 +26,8 @@ FS::format()
         this->fat[i] = FAT_FREE;
     }
 
+    this->cwd = "/";
+    this->cwb = ROOT_BLOCK;
     dir_entry root_array[64] = {0};
     this->disk.write(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
     this->disk.write(ROOT_BLOCK,reinterpret_cast<uint8_t*>(root_array));
@@ -37,9 +41,144 @@ int
 FS::create(string filepath)
 {
     cout << "FS::create(" << filepath << ")\n";
+    dir_entry directory_array[64] = {0};
+    int resultr = this->disk.read(ROOT_BLOCK,reinterpret_cast<uint8_t*>(directory_array));
+    int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
     
+    vector<string> filepaths; 
+    int y = 0;
+    char current = cwd[y];
+    string directory = "";
+    bool first = true;
+
+    while(current != '\0'){
+        if(cwd[y] == '/'){
+            if(first == false){
+                filepaths.push_back(directory);
+                directory = "";
+            }
+            else {
+                first = false;
+            }
+                 
+        }else{
+            directory += current;
+        }
+        
+        y++;
+        current = cwd[y];
+    }
+    filepaths.push_back(directory);
+
+    for(int k = 0; k < filepaths.size(); k++){
+        int j = 0;
+        while(j < 64 && filepaths[k] != directory_array[j].file_name){
+            j++;
+        }
+        if(filepaths[k] == directory_array[j].file_name){
+            
+            cwb = directory_array[j].first_blk;
+
+            this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+        }else{
+            cout << "Create(" << filepath<< ") - ERROR: File path incorrect \n";
+            return -1;
+        }
+    }
+
+    if(resultr == 0 && resultf == 0){
+        for(int i = 0; i < 64; i++){
+            if(directory_array[i].file_name[0] != '\0'){
+                if(directory_array[i].file_name == filepath){
+                    cout << "Create(" << filepath<< ") - ERROR: File already exists \n";
+                    return -1;
+                }  
+            }
+        }
+
+        bool inStreamEmpty = false;
+        int fileSize = 0;
+        bool firstBuffer = true;
+        int oldOpenBlock;
+        vector<char[4096]> totalFileBuffer;
+        dir_entry newFile;
+
+        while(inStreamEmpty == false){
+            char buffer[4096] = {0};
+            cin.read(buffer, 4096);
+            int bufferSize = cin.gcount();
+            fileSize += bufferSize;
+            
+
+            if(bufferSize != 4096){
+                inStreamEmpty = true;
+            }
+            int x = 2;
+            while(x < 2048 && fat[x] != 0){
+                x++;
+            }
+
+            if(fat[x] == 0){
+                
+                newFile.type = 0;
+                if(firstBuffer){
+                    newFile.first_blk = x;
+                }
+                newFile.access_rights = 6;
+                for(int i = 0; i < filepath.size(); i++){
+                    newFile.file_name[i] = filepath[i];
+                }
+                
+                if(!firstBuffer){
+                    if(bufferSize < 4096){
+                        fat[x] = FAT_EOF;
+                    }
+                    fat[oldOpenBlock] = x;
+                }
+                oldOpenBlock = x;
+                
+               totalFileBuffer.push_back(buffer);
+
+
+            }else{
+                cout << "Create(" << filepath<< ") - ERROR: File cant fit \n";
+                return -1;
+            }
+            
+            if(firstBuffer){
+                firstBuffer = false;
+            }
+
+           
+        }
+        int fileBlock = newFile.first_blk;
+
+        
+        newFile.size = fileSize;
+        int z = 0;
+        while(z < 64 && directory_array[z].file_name[0] !='\0'){
+            z++;
+        }
+        if(z < 64){
+            directory_array[z] = newFile;
+        }else{
+            cout << "Create(" << filepath<< ") - ERROR: Directory is full \n";
+            return -1;
+        }
+        for(int i = 0; i < totalFileBuffer.size(); i++){
+            this->disk.write(fileBlock,reinterpret_cast<uint8_t*>(totalFileBuffer[i]));
+            fileBlock = fat[fileBlock];
+        }
+        this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
+        this->disk.write(FAT_BLOCK,reinterpret_cast<uint8_t*>(fat));
+
+    }else{
+        return -1;
+    }
     return 0;
 }
+
+
 
 // cat <filepath> reads the content of a file and prints it on the screen
 int

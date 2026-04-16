@@ -29,6 +29,8 @@ private:
     Disk disk;
     // size of a FAT entry is 2 bytes
     int16_t fat[BLOCK_SIZE/2];
+    string cwd;
+    int cwb;
 
 public:
     FS();
