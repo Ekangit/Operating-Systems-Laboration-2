@@ -216,7 +216,17 @@ int
 FS::ls()
 {
     cout << "FS::ls()\n";
+    dir_entry directory_array[64] = {0};
+    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
 
+    cout << "name\t size" << endl;
+
+    for(int i = 0; i < 64; i++){
+        if(directory_array[i].file_name[0] != '\0'){
+            cout << directory_array[i].file_name << "\t" << directory_array[i].size << endl;
+        }
+    }
 
 
     return 0;
