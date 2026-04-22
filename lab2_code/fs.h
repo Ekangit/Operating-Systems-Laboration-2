@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstdint>
 #include "disk.h"
+#include <string>
 
 #ifndef __FS_H__
 #define __FS_H__
@@ -15,6 +16,8 @@
 #define READ 0x04
 #define WRITE 0x02
 #define EXECUTE 0x01
+
+using namespace std;
 
 struct dir_entry {
     char file_name[56]; // name of the file / sub-directory

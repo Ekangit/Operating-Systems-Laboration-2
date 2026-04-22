@@ -98,7 +98,7 @@ FS::create(string filepath)
         }
 
 
-        if(filepath.size() > 54){
+        if(filepath.size() > 55){
             cout << "Create(" << filepath<< ") - ERROR: Too long filename \n";
             return -1;
         }
@@ -107,7 +107,10 @@ FS::create(string filepath)
         for(int i = 0; i <filepath.size(); i++){
             newFile.file_name[i] = filepath[i];
         }
-        newFile.file_name[filepath.size()] = '\0';
+        if(filepath.size() != 55){
+            newFile.file_name[filepath.size()] = '\0';
+        }
+       
 
         newFile.type = TYPE_FILE;
         newFile.size = totalfile.size();
@@ -224,7 +227,7 @@ FS::ls()
 
     for(int i = 0; i < 64; i++){
         if(directory_array[i].file_name[0] != '\0'){
-            cout << directory_array[i].file_name << "\t" << directory_array[i].size << endl;
+            cout << directory_array[i].file_name << "\t " << directory_array[i].size << endl;
         }
     }
 

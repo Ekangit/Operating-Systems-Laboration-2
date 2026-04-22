@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <cstdint>
 
 #ifndef __DISK_H__
 #define __DISK_H__
@@ -7,6 +8,8 @@
 #define DISKNAME "diskfile.bin"
 #define BLOCK_SIZE 4096
 #define DEBUG false
+
+
 
 class Disk {
 private:
