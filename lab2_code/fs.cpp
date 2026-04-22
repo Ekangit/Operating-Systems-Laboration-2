@@ -42,50 +42,12 @@ FS::create(string filepath)
 {
     cout << "FS::create(" << filepath << ")\n";
     dir_entry directory_array[64] = {0};
-    int resultr = this->disk.read(ROOT_BLOCK,reinterpret_cast<uint8_t*>(directory_array));
+    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
     int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
     
-    vector<string> filepaths; 
-    int y = 0;
-    char current = cwd[y];
-    string directory = "";
-    bool first = true;
 
-    while(current != '\0'){
-        if(cwd[y] == '/'){
-            if(first == false){
-                filepaths.push_back(directory);
-                directory = "";
-            }
-            else {
-                first = false;
-            }
-                 
-        }else{
-            directory += current;
-        }
-        
-        y++;
-        current = cwd[y];
-    }
-    filepaths.push_back(directory);
 
-    for(int k = 0; k < filepaths.size(); k++){
-        int j = 0;
-        while(j < 64 && filepaths[k] != directory_array[j].file_name){
-            j++;
-        }
-        if(filepaths[k] == directory_array[j].file_name){
-            
-            cwb = directory_array[j].first_blk;
-
-            this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
-        }else{
-            cout << "Create(" << filepath<< ") - ERROR: File path incorrect \n";
-            return -1;
-        }
-    }
-
+    // Kolla om fil redan existerar i directory
     if(resultr == 0 && resultf == 0){
         for(int i = 0; i < 64; i++){
             if(directory_array[i].file_name[0] != '\0'){
@@ -96,65 +58,61 @@ FS::create(string filepath)
             }
         }
 
-        bool inStreamEmpty = false;
-        int fileSize = 0;
-        bool firstBuffer = true;
-        int oldOpenBlock;
-        vector<char[4096]> totalFileBuffer;
-        dir_entry newFile;
-
-        while(inStreamEmpty == false){
-            char buffer[4096] = {0};
-            cin.read(buffer, 4096);
-            int bufferSize = cin.gcount();
-            fileSize += bufferSize;
-            
-
-            if(bufferSize != 4096){
-                inStreamEmpty = true;
-            }
-            int x = 2;
-            while(x < 2048 && fat[x] != 0){
-                x++;
-            }
-
-            if(fat[x] == 0){
-                
-                newFile.type = 0;
-                if(firstBuffer){
-                    newFile.first_blk = x;
-                }
-                newFile.access_rights = 6;
-                for(int i = 0; i < filepath.size(); i++){
-                    newFile.file_name[i] = filepath[i];
-                }
-                
-                if(!firstBuffer){
-                    if(bufferSize < 4096){
-                        fat[x] = FAT_EOF;
-                    }
-                    fat[oldOpenBlock] = x;
-                }
-                oldOpenBlock = x;
-                
-               totalFileBuffer.push_back(buffer);
-
-
-            }else{
-                cout << "Create(" << filepath<< ") - ERROR: File cant fit \n";
-                return -1;
-            }
-            
-            if(firstBuffer){
-                firstBuffer = false;
-            }
-
-           
-        }
-        int fileBlock = newFile.first_blk;
-
         
-        newFile.size = fileSize;
+        dir_entry newFile;
+        string line;
+        string totalfile;
+
+        // Storea filen i buffrar och spara i array
+        while (getline(cin, line) && !line.empty()) {
+            totalfile += line + "\n";
+        }
+
+        // Hur många block behövs
+        int blocksNeeded = (totalfile.size() + 4095) / 4096; 
+        if (blocksNeeded == 0) {
+            blocksNeeded = 1;
+        }
+
+        // Hur mucket plats finns i fat
+        int freeCount = 0;
+        bool first = true;
+        vector<int> freeBlocks;
+        for(int i = 2; i < 2048; i++) {
+            if(fat[i] == FAT_FREE){
+                freeCount++;
+                freeBlocks.push_back(i);
+                if(first){
+                    newFile.first_blk = i;
+                    first = false;
+                }
+
+            } 
+            
+        }
+
+        // Kolla att vi har plats i fat
+        if(freeCount < blocksNeeded){
+            cout << "Create(" << filepath<< ") - ERROR: Not enough disk space \n";
+            return -1;
+        }
+
+
+        if(filepath.size() > 54){
+            cout << "Create(" << filepath<< ") - ERROR: Too long filename \n";
+            return -1;
+        }
+        // Uppdatera struct
+        newFile.access_rights = 6;
+        for(int i = 0; i <filepath.size(); i++){
+            newFile.file_name[i] = filepath[i];
+        }
+        newFile.file_name[filepath.size()] = '\0';
+
+        newFile.type = TYPE_FILE;
+        newFile.size = totalfile.size();
+
+        // Hitta ledig plats i directory och sätt in ny fil
         int z = 0;
         while(z < 64 && directory_array[z].file_name[0] !='\0'){
             z++;
@@ -165,10 +123,34 @@ FS::create(string filepath)
             cout << "Create(" << filepath<< ") - ERROR: Directory is full \n";
             return -1;
         }
-        for(int i = 0; i < totalFileBuffer.size(); i++){
-            this->disk.write(fileBlock,reinterpret_cast<uint8_t*>(totalFileBuffer[i]));
-            fileBlock = fat[fileBlock];
+
+        
+        int Block = freeBlocks[0];
+        for(int i = 0; i < blocksNeeded; i++){
+            Block = freeBlocks[i];
+            if(i == blocksNeeded - 1){
+                fat[Block] = FAT_EOF;
+            }else{
+                fat[Block] = freeBlocks[i+1];
+            }
         }
+
+
+    
+        // Skriv filbuffrar till disk
+        int size = totalfile.size();
+        for(int j = 0; j < blocksNeeded; j++){
+            uint8_t dataBlock[4096] = {0};
+            for(int i = 0; i < BLOCK_SIZE; i++){
+                if(size > i+(j*BLOCK_SIZE)){
+                    dataBlock[i] = totalfile[i+(j*BLOCK_SIZE)];
+                }
+            }
+            this->disk.write(freeBlocks[j],dataBlock);
+        }
+        
+        
+        // Skriv current directory och fat till disk
         this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
         this->disk.write(FAT_BLOCK,reinterpret_cast<uint8_t*>(fat));
 
@@ -185,6 +167,47 @@ int
 FS::cat(string filepath)
 {
     cout << "FS::cat(" << filepath << ")\n";
+    dir_entry directory_array[64] = {0};
+    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
+
+    int block = -1;
+    int fileSize;
+    // find first block
+    for(int i = 0; i < 64; i++){
+        if(directory_array[i].file_name == filepath){
+            block = directory_array[i].first_blk;
+            fileSize = directory_array[i].size;
+        }
+    }
+
+    if(block == -1){
+        cout << "Cat(" << filepath<< ") - ERROR: File not in CD \n";
+        return -1;
+    }
+
+  
+    uint8_t buffer[4096];
+    int blocksize = fileSize;
+    vector<int> blockSizes;
+
+    while(blocksize > BLOCK_SIZE){
+        blockSizes.push_back(BLOCK_SIZE);
+        blocksize -= BLOCK_SIZE;
+    }
+    blockSizes.push_back(blocksize);
+
+    int x = 0;
+    while(block != FAT_EOF){
+        disk.read(block,buffer);
+        block = fat[block];
+        for(int i = 0; i < blockSizes[x]; i++){
+            cout << static_cast<char>(buffer[i]);
+        }
+        x++;
+    }
+    
+
     return 0;
 }
 
@@ -193,6 +216,9 @@ int
 FS::ls()
 {
     cout << "FS::ls()\n";
+
+
+
     return 0;
 }
 
