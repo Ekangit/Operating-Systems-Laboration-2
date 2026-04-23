@@ -507,7 +507,7 @@ FS::append(string filepath1, string filepath2)
         return -1;
     }
 
-    int restSize = destSize / BLOCK_SIZE;
+    int restSize = destSize % BLOCK_SIZE;
     int totalSize = sourceSize + destSize;
     directory_array[destindex].size = totalSize;
 
@@ -558,7 +558,7 @@ FS::append(string filepath1, string filepath2)
 
     uint8_t destbuffer[4096];
     uint8_t sourcebuffer[4096];
-    uint8_t totalSourceFile[sourceSize];
+    string totalSourceFile = "";
     int blocksize = sourceSize;
     vector<int> blockSizes;
 
@@ -577,7 +577,7 @@ FS::append(string filepath1, string filepath2)
         disk.read(cBlock,sourcebuffer);
         cBlock = fat[cBlock];
         for(int i = 0; i < blockSizes[x]; i++){
-            totalSourceFile[z] = sourcebuffer[i];
+            totalSourceFile += sourcebuffer[i];
             z++;
         }
         x++;
@@ -589,34 +589,30 @@ FS::append(string filepath1, string filepath2)
     //Gör färdigt sista block för destfil
     int j = 0;
     for(int i = restSize; i < BLOCK_SIZE; i++){
-        if(sourcebuffer[i] != '\0'){
-            destbuffer[i] = sourcebuffer[j];
+        if(j < sourceSize){
+            destbuffer[i] = totalSourceFile[j];
         }
         j++;
     }
     this->disk.write(block,destbuffer);
 
-    string totalSourceFile = "";
-
     
-    int block = freeBlocks[0];
+    
     for(int x = 0; x < extrablocks; x++){
+        memset(destbuffer, 0, BLOCK_SIZE);
+        block = freeBlocks[x];
         for(int i = 0; i < BLOCK_SIZE; i++){
             if(j < sourceSize){
-                destbuffer[i] = sourcebuffer[j];
+                destbuffer[i] = totalSourceFile[j];
+                j++;
             }
-            j++;
         }
         this->disk.write(block,destbuffer);
         
-        if(j == sourceSize -1){
-            fat[back] = FAT_EOF;
-        }else{
-            fat[back] = block;
-            back = block;
-            block = freeBlocks[x+1];
-        }
-        
+        fat[back] = block;
+        fat[block] = FAT_EOF;
+        back = block;
+       
     }
     
     this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
