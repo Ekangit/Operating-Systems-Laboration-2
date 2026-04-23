@@ -245,6 +245,11 @@ FS::cp(string sourcepath, string destpath)
     int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
     int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
 
+    if(destpath.size() > 55){
+        cout << "Create(" << destpath<< ") - ERROR: Too long filename \n";
+        return -1;
+    }
+
     if(sourcepath == destpath){
         cout << "FS::cp(" << sourcepath << "," << destpath << ") - Error same filename for source and copy\n";
         return -1;
@@ -260,8 +265,8 @@ FS::cp(string sourcepath, string destpath)
             if(directory_array[i].file_name == sourcepath){
                 found = true;
 
-                for(int i = 0; i < destpath.size(); i++){
-                    newFile.file_name[i] = destpath[i];
+                for(int j = 0; j < destpath.size(); j++){
+                    newFile.file_name[j] = destpath[j];
                 }
                 newFile.access_rights = directory_array[i].access_rights;
                 newFile.size = directory_array[i].size;
@@ -357,6 +362,57 @@ int
 FS::mv(string sourcepath, string destpath)
 {
     cout << "FS::mv(" << sourcepath << "," << destpath << ")\n";
+    dir_entry directory_array[64] = {0};
+    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+
+    if(destpath.size() > 55){
+        cout << "Create(" << destpath<< ") - ERROR: Too long filename \n";
+        return -1;
+    }
+
+    if(resultr == -1){
+        return -1;
+    }
+
+    if(sourcepath == destpath){
+        return 0;
+    }
+
+    bool found = false;
+    int sourceIndex;
+    for(int i = 0; i < 64; i++){
+        if(directory_array[i].file_name[0] != '\0'){
+            if(directory_array[i].file_name == sourcepath){
+                found = true;
+                sourceIndex = i;
+            } 
+            if(directory_array[i].file_name == destpath){
+                cout << "FS::mv(" << sourcepath << "," << destpath << ") - Error Copy filename already exists\n";
+                return -1;
+            }
+        }
+    }
+
+    //Kolla så att filen existerar
+    if(!found){
+        cout << "mv(" << sourcepath << ") - ERROR: File not in CD \n";
+        return -1;
+    }
+
+    // Nollställ namnet
+    for(int k = 0; k < 56; k++) {
+        directory_array[sourceIndex].file_name[k] = '\0';
+    }
+
+    // Ändra namnet
+    for(int j = 0; j < destpath.size(); j++){
+        directory_array[sourceIndex].file_name[j] = destpath[j];
+    }
+
+    
+
+    this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
+
     return 0;
 }
 
