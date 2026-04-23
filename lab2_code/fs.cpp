@@ -241,6 +241,113 @@ int
 FS::cp(string sourcepath, string destpath)
 {
     cout << "FS::cp(" << sourcepath << "," << destpath << ")\n";
+    dir_entry directory_array[64] = {0};
+    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
+
+    if(sourcepath == destpath){
+        cout << "FS::cp(" << sourcepath << "," << destpath << ") - Error same filename for source and copy\n";
+        return -1;
+    }
+
+    //Gå igenom cd
+    bool found = false;
+    int firstBlock;
+    int fileSize;
+    dir_entry newFile;
+    for(int i = 0; i < 64; i++){
+        if(directory_array[i].file_name[0] != '\0'){
+            if(directory_array[i].file_name == sourcepath){
+                found = true;
+
+                for(int i = 0; i < destpath.size(); i++){
+                    newFile.file_name[i] = destpath[i];
+                }
+                newFile.access_rights = directory_array[i].access_rights;
+                newFile.size = directory_array[i].size;
+                newFile.type = directory_array[i].type;
+
+                firstBlock = directory_array[i].first_blk;
+                fileSize = directory_array[i].size;
+            } 
+            if(directory_array[i].file_name == destpath){
+                cout << "FS::cp(" << sourcepath << "," << destpath << ") - Error Copy filename already exists\n";
+                return -1;
+            }
+        }
+    }
+
+    //Kolla så att filen existerar
+    if(!found){
+        cout << "cp(" << sourcepath << ") - ERROR: File not in CD \n";
+        return -1;
+    }
+
+    // Kolla hur många blocks behövs
+    int blocksNeeded = (fileSize + 4095) / 4096; 
+    if (blocksNeeded == 0) {
+        blocksNeeded = 1;
+    }
+
+    // Hur mucket plats finns i fat
+    int freeCount = 0;
+    bool first = true;
+    vector<int> freeBlocks;
+    for(int i = 2; i < 2048; i++) {
+        if(fat[i] == FAT_FREE){
+            freeCount++;
+            freeBlocks.push_back(i);
+            if(first){
+                newFile.first_blk = i;
+                first = false;
+            }
+        } 
+    }
+
+    // Kolla att vi har plats i fat
+    if(freeCount < blocksNeeded){
+        cout << "cp(" << destpath << ") - ERROR: Not enough disk space \n";
+        return -1;
+    }
+
+    // Hitta ledig plats i directory och sätt in ny fil
+    int z = 0;
+    while(z < 64 && directory_array[z].file_name[0] !='\0'){
+        z++;
+    }
+    if(z < 64){
+        directory_array[z] = newFile;
+    }else{
+        cout << "cp(" << destpath<< ") - ERROR: Directory is full \n";
+        return -1;
+    }
+
+    // Uppdatera FAT
+    int Block;
+    for(int i = 0; i < blocksNeeded; i++){
+        Block = freeBlocks[i];
+        if(i == blocksNeeded - 1){
+            fat[Block] = FAT_EOF;
+        }else{
+            fat[Block] = freeBlocks[i+1];
+        }
+    }
+
+    
+    // Kopiera till disk
+    int block = firstBlock;
+    uint8_t buffer[4096];
+    int x = 0;
+    while(block != FAT_EOF){
+        disk.read(block,buffer);
+        this->disk.write(freeBlocks[x],buffer);
+        block = fat[block];
+        x++;
+    }
+
+    this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    this->disk.write(FAT_BLOCK,reinterpret_cast<uint8_t*>(fat));
+
     return 0;
 }
 
