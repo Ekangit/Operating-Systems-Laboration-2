@@ -1,6 +1,7 @@
 #include <iostream>
 #include "fs.h"
 #include <vector>
+#include <cstring>
 
 using namespace std;
 
@@ -408,7 +409,6 @@ FS::mv(string sourcepath, string destpath)
     for(int j = 0; j < destpath.size(); j++){
         directory_array[sourceIndex].file_name[j] = destpath[j];
     }
-
     
 
     this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
@@ -421,6 +421,44 @@ int
 FS::rm(string filepath)
 {
     cout << "FS::rm(" << filepath << ")\n";
+    dir_entry directory_array[64] = {0};
+    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
+
+    if(resultf == -1 || resultr == -1){
+        return -1;
+    }
+
+    bool found = false;
+    int Block;
+    for(int i = 0; i < 64; i++){
+        if(directory_array[i].file_name[0] != '\0'){
+            if(directory_array[i].file_name == filepath){
+                found = true;
+                Block = directory_array[i].first_blk;
+                // Nollställer dir_entry-structen
+                memset(&directory_array[i], 0, sizeof(dir_entry));
+
+            } 
+        }
+    }
+
+    //Kolla så att filen existerar
+    if(!found){
+        cout << "mv(" << filepath << ") - ERROR: File not in CD \n";
+        return -1;
+    }
+
+    int back;
+    while(Block != FAT_EOF){
+        back = Block;
+        Block = fat[Block];
+        fat[back] = FAT_FREE;
+    }
+
+    this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    this->disk.write(FAT_BLOCK,reinterpret_cast<uint8_t*>(fat));
+
     return 0;
 }
 
