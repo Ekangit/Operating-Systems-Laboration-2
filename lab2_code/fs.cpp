@@ -103,6 +103,7 @@ FS::create(string filepath)
             cout << "Create(" << filepath<< ") - ERROR: Too long filename \n";
             return -1;
         }
+
         // Uppdatera struct
         newFile.access_rights = 6;
         for(int i = 0; i <filepath.size(); i++){
@@ -128,7 +129,7 @@ FS::create(string filepath)
             return -1;
         }
 
-        
+        // Uppdatera fat
         int Block = freeBlocks[0];
         for(int i = 0; i < blocksNeeded; i++){
             Block = freeBlocks[i];
@@ -177,7 +178,7 @@ FS::cat(string filepath)
 
     int block = -1;
     int fileSize;
-    // find first block
+    // Hitta filen och ändra variabler
     for(int i = 0; i < 64; i++){
         if(directory_array[i].file_name == filepath){
             block = directory_array[i].first_blk;
@@ -468,6 +469,159 @@ int
 FS::append(string filepath1, string filepath2)
 {
     cout << "FS::append(" << filepath1 << "," << filepath2 << ")\n";
+    dir_entry directory_array[64] = {0};
+    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
+
+    if(resultf == -1 || resultr == -1){
+        return -1;
+    }
+
+    // Gå igenom cd och initiera variabler
+    bool foundfirst = false;
+    bool foundsecond = false;
+    int sourceFirstBlock;
+    int destFirstBlock;
+    int sourceSize;
+    int destSize;
+    int destindex;
+    for(int i = 0; i < 64; i++){
+        if(directory_array[i].file_name[0] != '\0'){
+            if(directory_array[i].file_name == filepath1){
+                foundfirst = true;
+                sourceFirstBlock = directory_array[i].first_blk;
+                sourceSize = directory_array[i].size;
+            } 
+            if(directory_array[i].file_name == filepath2){
+                foundsecond = true;
+                destFirstBlock = directory_array[i].first_blk;
+                destSize = directory_array[i].size;
+                destindex = i;
+            } 
+        }
+    }
+
+    //Kolla så att filerna existerar
+    if(!foundfirst || !foundsecond){
+        cout << "mv(" << filepath1 << filepath2 << ") - ERROR: File not in CD \n";
+        return -1;
+    }
+
+    int restSize = destSize / BLOCK_SIZE;
+    int totalSize = sourceSize + destSize;
+    directory_array[destindex].size = totalSize;
+
+    // Kolla hur många blocks behövs totalt
+    int totalblocksNeeded = (totalSize + 4095) / 4096; 
+    if (totalblocksNeeded == 0) {
+        totalblocksNeeded = 1;
+    }
+
+    // Kolla hur många blocks dest använder
+    int destblocks = (destSize + 4095) / 4096; 
+    if (destblocks == 0) {
+        destblocks = 1;
+    }
+
+    int extrablocks = totalblocksNeeded - destblocks;
+
+    // Hur mucket plats finns i fat
+    int freeCount = 0;
+    bool first = true;
+    vector<int> freeBlocks;
+    for(int i = 2; i < 2048; i++) {
+        if(fat[i] == FAT_FREE){
+            freeCount++;
+            freeBlocks.push_back(i);
+            if(first){
+                first = false;
+            }
+        } 
+    }
+
+    // Kolla att vi har plats i fat
+    if(freeCount < extrablocks){
+        cout << "Append(" << filepath1 << filepath2 << ") - ERROR: Not enough disk space \n";
+        return -1;
+    }
+
+    
+    // Gå till sista  block i destfil
+    int block = destFirstBlock;
+    int back;
+    while(block != FAT_EOF){
+        back = block;
+        block = fat[block];
+    }
+    block = back;
+
+
+    uint8_t destbuffer[4096];
+    uint8_t sourcebuffer[4096];
+    uint8_t totalSourceFile[sourceSize];
+    int blocksize = sourceSize;
+    vector<int> blockSizes;
+
+    //Spara block sizes för sourcefil
+    while(blocksize > BLOCK_SIZE){
+        blockSizes.push_back(BLOCK_SIZE);
+        blocksize -= BLOCK_SIZE;
+    }
+    blockSizes.push_back(blocksize);
+
+    // Kopiera till fulla buffer för sourcefil
+    int x = 0;
+    int cBlock = sourceFirstBlock;
+    int z = 0;
+    while(cBlock != FAT_EOF){
+        disk.read(cBlock,sourcebuffer);
+        cBlock = fat[cBlock];
+        for(int i = 0; i < blockSizes[x]; i++){
+            totalSourceFile[z] = sourcebuffer[i];
+            z++;
+        }
+        x++;
+    }
+
+
+    this->disk.read(block,destbuffer);
+
+    //Gör färdigt sista block för destfil
+    int j = 0;
+    for(int i = restSize; i < BLOCK_SIZE; i++){
+        if(sourcebuffer[i] != '\0'){
+            destbuffer[i] = sourcebuffer[j];
+        }
+        j++;
+    }
+    this->disk.write(block,destbuffer);
+
+    string totalSourceFile = "";
+
+    
+    int block = freeBlocks[0];
+    for(int x = 0; x < extrablocks; x++){
+        for(int i = 0; i < BLOCK_SIZE; i++){
+            if(j < sourceSize){
+                destbuffer[i] = sourcebuffer[j];
+            }
+            j++;
+        }
+        this->disk.write(block,destbuffer);
+        
+        if(j == sourceSize -1){
+            fat[back] = FAT_EOF;
+        }else{
+            fat[back] = block;
+            back = block;
+            block = freeBlocks[x+1];
+        }
+        
+    }
+    
+    this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    this->disk.write(FAT_BLOCK,reinterpret_cast<uint8_t*>(fat));
+
     return 0;
 }
 
