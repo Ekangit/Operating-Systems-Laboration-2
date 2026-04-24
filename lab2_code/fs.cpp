@@ -5,6 +5,122 @@
 
 using namespace std;
 
+int FS::getDirectoryBlock(string path, string &fileName)
+{
+    dir_entry directory_array[64] = {0};
+
+    int inputtype = 0;
+    int directoryBlock = cwb;
+    
+    if(path[0] == '/'){
+        inputtype = 1;
+    }else{
+        int x = 0;
+        bool exists = false;
+        while(x < path.size() && !exists){
+            if(path[x] == '/'){
+                exists = true;
+            }
+            x++;
+        }
+
+        if(exists){
+            inputtype = 2;
+        }
+    }
+    
+    if(inputtype == 1){
+        vector<string> paths;
+        directoryBlock = ROOT_BLOCK;
+        this->disk.read(ROOT_BLOCK,reinterpret_cast<uint8_t*>(directory_array));
+        bool firsttimea = true;
+        string foldername = "";
+        for(int i = 0; i < path.size(); i++){
+            if(path[i] == '/'){
+                if(firsttimea){
+                    firsttimea = false;
+                }else{
+                    paths.push_back(foldername);
+                    foldername = "";
+                }
+            }else{
+                foldername += path[i];
+            }
+        }
+        if(foldername == ""){
+            if (!paths.empty()) { 
+                path = paths.back();
+                paths.pop_back();
+            } else {
+                path = "/"; 
+            }
+        }
+        for(int i = 0; i < paths.size(); i++){
+            bool founda = false;
+            int k = 0;
+            while(k < 64 && !founda){
+                if(directory_array[k].file_name[0] != '\0'){
+                    if(directory_array[k].file_name == paths[i]){
+                        founda = true;
+                        directoryBlock = directory_array[k].first_blk;
+                        this->disk.read(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
+                    }
+                }
+                k++;
+            }
+            if(!founda){
+                cout << "FS:: gDB(" << path << ") - ERROR: A folder in path does not exists\n";
+                return -1;
+            }
+        }
+
+
+    }else if (inputtype == 2){
+        vector<string> paths;
+        this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+        string foldername = "";
+        for(int i = 0; i < path.size(); i++){
+            if(path[i] == '/'){
+                paths.push_back(foldername);
+                foldername = "";
+            }else{
+                foldername += path[i];
+            }
+        }
+        if(foldername == ""){
+            if (!paths.empty()) { 
+                path = paths.back();
+                paths.pop_back();
+            } else {
+                path = "/"; 
+            }
+        }
+        for(int i = 0; i < paths.size(); i++){
+            bool foundr = false;
+            int k = 0;
+            while(k < 64 && !foundr){
+                if(directory_array[k].file_name[0] != '\0'){
+                    if(directory_array[k].file_name == paths[i]){
+                        foundr = true;
+                        directoryBlock = directory_array[k].first_blk;
+                        this->disk.read(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
+                    }
+                }
+                k++;
+            }
+            if(!foundr){
+                cout << "FS::gDB(" << path << ") - ERROR: A folder in path does not exists\n";
+                return -1;
+            }
+        }
+    }else if(inputtype == 0){
+        this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    }
+
+
+    fileName = path;
+    return directoryBlock;
+}
 
 FS::FS()
 {
