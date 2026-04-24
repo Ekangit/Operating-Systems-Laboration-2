@@ -728,6 +728,35 @@ int
 FS::cd(string dirpath)
 {
     cout << "FS::cd(" << dirpath << ")\n";
+
+    dir_entry directory_array[64] = {0};
+    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
+
+    if(resultf == -1 || resultr == -1){
+        return -1;
+    }
+
+    int directoryindex = -1;
+    for(int i = 0; i < 64; i++){
+        if(directory_array[i].file_name[0] != '\0'){
+            if(directory_array[i].file_name == dirpath){
+                directoryindex = i;
+                if(directory_array[i].type == TYPE_FILE){
+                    cout << "FS::cd(" << dirpath << ") - ERROR: Directoryname is a file\n";
+                    return -1;
+                }
+            }
+        }
+    }
+    
+    if(directoryindex != -1){
+        this->cwb = directory_array[directoryindex].first_blk;
+    }else{
+        cout << "FS::cd(" << dirpath << ") - ERROR: Directory does not exists\n";
+        return -1;
+    }
+
     return 0;
 }
 
