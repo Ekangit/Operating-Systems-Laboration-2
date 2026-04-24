@@ -927,11 +927,119 @@ FS::cd(string dirpath)
 
 
     dir_entry directory_array[64] = {0};
-    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
     int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
 
-    if(resultf == -1 || resultr == -1){
-        return -1;
+     // 0 - file, 1 - absolute,  2 - relativ, 
+    int inputtype = 0;
+    int directoryBlock = cwb;
+
+    if(dirpath == ".." && cwb == ROOT_BLOCK){
+        return 0;
+    }
+    
+
+    if(dirpath[0] == '/'&& dirpath.size() == 1){
+        cwb = ROOT_BLOCK;
+        return 0;
+    }
+    else if(dirpath[0] == '/'&& dirpath.size() > 1){
+        inputtype = 1;
+    }else{
+        int x = 0;
+        bool exists = false;
+        while(x < dirpath.size() && !exists){
+            if(dirpath[x] == '/'){
+                exists = true;
+            }
+            x++;
+        }
+
+        if(exists){
+            inputtype = 2;
+        }
+    }
+    
+    if(inputtype == 1){
+        vector<string> paths;
+        this->disk.read(ROOT_BLOCK,reinterpret_cast<uint8_t*>(directory_array));
+        bool firsttimea = true;
+        string foldername = "";
+        for(int i = 0; i < dirpath.size(); i++){
+            if(dirpath[i] == '/'){
+                if(firsttimea){
+                    firsttimea = false;
+                }else{
+                    paths.push_back(foldername);
+                    foldername = "";
+                }
+            }else{
+                foldername += dirpath[i];
+            }
+        }
+        if(foldername == ""){
+            dirpath = paths.back();
+            paths.pop_back();
+        }else{
+            dirpath = foldername;
+        }
+        for(int i = 0; i < paths.size(); i++){
+            bool founda = false;
+            int k = 0;
+            while(k < 64 && !founda){
+                if(directory_array[k].file_name[0] != '\0'){
+                    if(directory_array[k].file_name == paths[i]){
+                        founda = true;
+                        directoryBlock = directory_array[k].first_blk;
+                        this->disk.read(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
+                    }
+                }
+                k++;
+            }
+            if(!founda){
+                cout << "FS::cd(" << dirpath << ") - ERROR: A folder in path does not exists\n";
+                return -1;
+            }
+        }
+
+
+    }else if (inputtype == 2){
+        vector<string> paths;
+        this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+        string foldername = "";
+        for(int i = 0; i < dirpath.size(); i++){
+            if(dirpath[i] == '/'){
+                paths.push_back(foldername);
+                foldername = "";
+            }else{
+                foldername += dirpath[i];
+            }
+        }
+        if(foldername == ""){
+            dirpath = paths.back();
+            paths.pop_back();
+        }else{
+            dirpath = foldername;
+        }
+        for(int i = 0; i < paths.size(); i++){
+            bool foundr = false;
+            int k = 0;
+            while(k < 64 && !foundr){
+                if(directory_array[k].file_name[0] != '\0'){
+                    if(directory_array[k].file_name == paths[i]){
+                        foundr = true;
+                        directoryBlock = directory_array[k].first_blk;
+                        this->disk.read(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
+                    }
+                }
+                k++;
+            }
+            if(!foundr){
+                cout << "FS::cd(" << dirpath << ") - ERROR: A folder in path does not exists\n";
+                return -1;
+            }
+        }
+    }else if(inputtype == 0){
+        this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
     }
 
     int directoryindex = -1;
