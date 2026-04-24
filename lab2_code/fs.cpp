@@ -686,7 +686,14 @@ FS::rm(string filepath)
 {
     cout << "FS::rm(" << filepath << ")\n";
     dir_entry directory_array[64] = {0};
-    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+
+    string filename = "";
+    int typeofpath;
+    int directoryBlock = getDirectoryBlock(filepath,filename,typeofpath);
+    if(directoryBlock == -1){
+        return -1;
+    }
+    int resultr = this->disk.read(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
     int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
 
     if(resultf == -1 || resultr == -1){
@@ -699,7 +706,7 @@ FS::rm(string filepath)
     int index;
     for(int i = 0; i < 64; i++){
         if(directory_array[i].file_name[0] != '\0'){
-            if(directory_array[i].file_name == filepath){
+            if(directory_array[i].file_name == filename){
                 if(directory_array[i].type == TYPE_FILE){
                     found = true;
                     Block = directory_array[i].first_blk;
@@ -717,7 +724,7 @@ FS::rm(string filepath)
 
     //Kolla så att filen existerar
     if(!found){
-        cout << "rm(" << filepath << ") - ERROR: File not in CD \n";
+        cout << "rm(" << filename << ") - ERROR: File not in CD \n";
         return -1;
     }
 
@@ -729,7 +736,7 @@ FS::rm(string filepath)
             fat[back] = FAT_FREE;
         }
 
-        this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
+        this->disk.write(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
         this->disk.write(FAT_BLOCK,reinterpret_cast<uint8_t*>(fat));
     }else{
         dir_entry dest_array[64] = {0};
@@ -746,14 +753,14 @@ FS::rm(string filepath)
             counter++;
         }
         if(foundsomething){
-            cout << "rm(" << filepath << ") - ERROR: Directory is not empty \n";
+            cout << "rm(" << filename << ") - ERROR: Directory is not empty \n";
             return -1;
         }
         
         fat[Block] = FAT_FREE;
         memset(&directory_array[index], 0, sizeof(dir_entry));
 
-        this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
+        this->disk.write(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
         this->disk.write(FAT_BLOCK,reinterpret_cast<uint8_t*>(fat));
 
     }
