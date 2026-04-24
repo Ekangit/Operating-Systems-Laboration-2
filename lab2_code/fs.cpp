@@ -775,7 +775,22 @@ FS::append(string filepath1, string filepath2)
 {
     cout << "FS::append(" << filepath1 << "," << filepath2 << ")\n";
     dir_entry directory_array[64] = {0};
-    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+
+    string filename1 = "";
+    int typeofpath1;
+    int directoryBlock1 = getDirectoryBlock(filepath1,filename1,typeofpath1);
+    if(directoryBlock1 == -1){
+        return -1;
+    }
+    
+    string filename2 = "";
+    int typeofpath2;
+    int directoryBlock2 = getDirectoryBlock(filepath2,filename2,typeofpath2);
+    if(directoryBlock2 == -1){
+        return -1;
+    }
+
+    int resultr = this->disk.read(directoryBlock1,reinterpret_cast<uint8_t*>(directory_array));
     int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
 
     if(resultf == -1 || resultr == -1){
@@ -792,23 +807,40 @@ FS::append(string filepath1, string filepath2)
     int destindex;
     for(int i = 0; i < 64; i++){
         if(directory_array[i].file_name[0] != '\0'){
-            if(directory_array[i].file_name == filepath1){
+            if(directory_array[i].file_name == filename1){
+                if(directory_array[i].type == TYPE_DIR){
+                    cout << "append(" << filename1 << filename2 << ") - ERROR: File is a directory \n";
+                    return -1;
+                }
                 foundfirst = true;
                 sourceFirstBlock = directory_array[i].first_blk;
                 sourceSize = directory_array[i].size;
             } 
-            if(directory_array[i].file_name == filepath2){
+            
+        }
+    }
+
+    this->disk.read(directoryBlock2,reinterpret_cast<uint8_t*>(directory_array));
+    for(int i = 0; i < 64; i++){
+        if(directory_array[i].file_name[0] != '\0'){
+            if(directory_array[i].file_name == filename2){
+                if(directory_array[i].type == TYPE_DIR){
+                    cout << "append(" << filename1 << filename2 << ") - ERROR: File is a directory \n";
+                    return -1;
+                }
                 foundsecond = true;
                 destFirstBlock = directory_array[i].first_blk;
                 destSize = directory_array[i].size;
                 destindex = i;
             } 
+            
         }
     }
+        
 
     //Kolla så att filerna existerar
     if(!foundfirst || !foundsecond){
-        cout << "mv(" << filepath1 << filepath2 << ") - ERROR: File not in CD \n";
+        cout << "append(" << filename1 << filename2 << ") - ERROR: File not in CD \n";
         return -1;
     }
 
@@ -846,7 +878,7 @@ FS::append(string filepath1, string filepath2)
 
     // Kolla att vi har plats i fat
     if(freeCount < extrablocks){
-        cout << "Append(" << filepath1 << filepath2 << ") - ERROR: Not enough disk space \n";
+        cout << "Append(" << filename1 << filename2 << ") - ERROR: Not enough disk space \n";
         return -1;
     }
 
@@ -888,18 +920,20 @@ FS::append(string filepath1, string filepath2)
         x++;
     }
 
-
-    this->disk.read(block,destbuffer);
-
-    //Gör färdigt sista block för destfil
     int j = 0;
-    for(int i = restSize; i < BLOCK_SIZE; i++){
-        if(j < sourceSize){
-            destbuffer[i] = totalSourceFile[j];
+    if(restSize != 0){
+        this->disk.read(block,destbuffer);
+
+        //Gör färdigt sista block för destfil
+       
+        for(int i = restSize; i < BLOCK_SIZE; i++){
+            if(j < sourceSize){
+                destbuffer[i] = totalSourceFile[j];
+                j++;
+            }
         }
-        j++;
+        this->disk.write(block,destbuffer);
     }
-    this->disk.write(block,destbuffer);
 
     
     
@@ -920,7 +954,7 @@ FS::append(string filepath1, string filepath2)
        
     }
     
-    this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    this->disk.write(directoryBlock2,reinterpret_cast<uint8_t*>(directory_array));
     this->disk.write(FAT_BLOCK,reinterpret_cast<uint8_t*>(fat));
 
     return 0;

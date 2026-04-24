@@ -159,22 +159,14 @@ Shell::run()
     std::cout << "-----" << std::endl;
     std::cout << "cp(f1,f3)..." << std::endl;
     filesystem.cp("f1","f3");
-    filesystem.ls(); //
-    filesystem.pwd(); //
     std::cout << "cp(f2,f4)..." << std::endl;
     filesystem.cp("f2","f4");
     std::cout << "cp(f1,..)..." << std::endl;
     filesystem.cp("f1","..");
-    filesystem.ls(); //
-    filesystem.pwd(); //
     std::cout << "cp(f2,/d1)..." << std::endl;
     filesystem.cp("f2","/d1");
-    filesystem.ls(); //
-    filesystem.pwd(); //
     std::cout << "mv(f3,..)..." << std::endl;
     filesystem.mv("f3","..");
-    filesystem.ls(); //
-    filesystem.pwd(); //
     std::cout << "mv(f4,/d1)..." << std::endl;
     filesystem.mv("f4","/d1");
     std::cout << "Expected output:" << std::endl;
