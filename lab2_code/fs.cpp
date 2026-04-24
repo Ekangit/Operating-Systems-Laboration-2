@@ -627,6 +627,99 @@ int
 FS::mkdir(string dirpath)
 {
     cout << "FS::mkdir(" << dirpath << ")\n";
+
+    dir_entry directory_array[64] = {0};
+    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
+
+    if(resultf == -1 || resultr == -1){
+        return -1;
+    }
+
+
+    if(dirpath.size() > 55){
+        cout << "FS::mkdir(" << dirpath << ") - ERROR: Too long directory name\n";
+        return -1;
+    }
+
+    // Gå igenom current directory och kolla om filnamnet existerar och om det finns plats för nya directory
+    int freeDirectoryIndex;
+    bool first = true;
+    int parentindex = -1;
+    dir_entry newDir = {0};
+    dir_entry newParentDir = {0};
+    for(int i = 0; i < 64; i++){
+        if(directory_array[i].file_name[0] != '\0'){
+            if(directory_array[i].file_name == dirpath){
+                cout << "FS::mkdir(" << dirpath << ") - ERROR: Directory name already exists\n";
+                return -1;
+            }else if(directory_array[i].file_name == ".."){
+                parentindex = i;
+            }
+        }else{
+            if(first){
+                first = false;
+                freeDirectoryIndex = i;
+            }
+        }
+    }
+
+    if(first){
+        cout << "FS::mkdir(" << dirpath << ") - ERROR: Current directory is full\n";
+        return -1;
+    }
+
+    int blocksNeeded = 1;
+
+    // Hur mucket plats finns i fat
+    int freeCount = 0;
+    vector<int> freeBlocks;
+    for(int i = 2; i < 2048; i++) {
+        if(fat[i] == FAT_FREE){
+            freeCount++;
+            freeBlocks.push_back(i);
+        } 
+    }
+
+    // Kolla att vi har plats i fat
+    if(freeCount < blocksNeeded){
+        cout << "FS::mkdir(" << dirpath << ") - ERROR: No blocks available\n";
+        return -1;
+    }
+
+    int newDirectoryBlock = freeBlocks[0];
+
+    // Uppdatera nya dir_entry
+    newDir.access_rights = READ + WRITE;
+    newDir.first_blk = newDirectoryBlock;
+    newDir.type = TYPE_DIR;
+    
+
+    for(int i = 0; i < dirpath.size(); i++){
+        newDir.file_name[i] = dirpath[i];
+    }
+    newDir.file_name[dirpath.size()] = '\0';
+
+    directory_array[freeDirectoryIndex] = newDir;
+
+    fat[newDirectoryBlock] = FAT_EOF;
+
+    // Uppdatera nya .. directory
+    
+    newParentDir.file_name[0] = '.';
+    newParentDir.file_name[1] = '.';
+    newParentDir.first_blk = cwb;
+    newParentDir.type = TYPE_DIR;
+    newParentDir.access_rights = READ + WRITE;
+
+    this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    this->disk.write(FAT_BLOCK,reinterpret_cast<uint8_t*>(fat));
+
+    dir_entry child_array[64] = {0};
+    child_array[0] = newParentDir;
+    this->disk.write(newDirectoryBlock,reinterpret_cast<uint8_t*>(child_array));
+
+
     return 0;
 }
 
