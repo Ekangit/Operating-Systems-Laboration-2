@@ -732,18 +732,110 @@ FS::mkdir(string dirpath)
     cout << "FS::mkdir(" << dirpath << ")\n";
 
     dir_entry directory_array[64] = {0};
-    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
     int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
-
-    if(resultf == -1 || resultr == -1){
-        return -1;
-    }
 
 
     if(dirpath.size() > 55){
         cout << "FS::mkdir(" << dirpath << ") - ERROR: Too long directory name\n";
         return -1;
     }
+
+    // 0 - file, 1 - absolute,  2 - relativ
+    int inputtype = 0;
+    int directoryBlock = cwb;
+    
+    if(dirpath[0] == '/'){
+        inputtype = 1;
+    }else{
+        int x = 0;
+        bool exists = false;
+        while(x < dirpath.size() && !exists){
+            if(dirpath[x] == '/'){
+                exists = true;
+            }
+            x++;
+        }
+
+        if(exists){
+            inputtype = 2;
+        }
+    }
+    
+    if(inputtype == 1){
+        vector<string> paths;
+        this->disk.read(ROOT_BLOCK,reinterpret_cast<uint8_t*>(directory_array));
+        bool firsttimea = true;
+        string foldername = "";
+        for(int i = 0; i < dirpath.size(); i++){
+            if(dirpath[i] == '/'){
+                if(firsttimea){
+                    firsttimea = false;
+                }else{
+                    paths.push_back(foldername);
+                    foldername = "";
+                }
+            }else{
+                foldername += dirpath[i];
+            }
+        }
+        dirpath = foldername;
+        for(int i = 0; i < paths.size(); i++){
+            bool founda = false;
+            int k = 0;
+            while(k < 64 && !founda){
+                if(directory_array[k].file_name[0] != '\0'){
+                    if(directory_array[k].file_name == paths[i]){
+                        founda = true;
+                        directoryBlock = directory_array[k].first_blk;
+                        this->disk.read(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
+                    }
+                }
+                k++;
+            }
+            if(!founda){
+                cout << "FS::mkdir(" << dirpath << ") - ERROR: A folder in path does not exists\n";
+                return -1;
+            }
+        }
+
+
+    }else if (inputtype == 2){
+        vector<string> paths;
+        this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+        string foldername = "";
+        for(int i = 0; i < dirpath.size(); i++){
+            if(dirpath[i] == '/'){
+                paths.push_back(foldername);
+                foldername = "";
+            }else{
+                foldername += dirpath[i];
+            }
+        }
+        dirpath = foldername;
+        for(int i = 0; i < paths.size(); i++){
+            bool foundr = false;
+            int k = 0;
+            while(k < 64 && !foundr){
+                if(directory_array[k].file_name[0] != '\0'){
+                    if(directory_array[k].file_name == paths[i]){
+                        foundr = true;
+                        directoryBlock = directory_array[k].first_blk;
+                        this->disk.read(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
+                    }
+                }
+                k++;
+            }
+            if(!foundr){
+                cout << "FS::mkdir(" << dirpath << ") - ERROR: A folder in path does not exists\n";
+                return -1;
+            }
+        }
+    }else if(inputtype == 0){
+        this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    }
+
+
+    
 
     // Gå igenom current directory och kolla om filnamnet existerar och om det finns plats för nya directory
     int freeDirectoryIndex;
@@ -811,11 +903,12 @@ FS::mkdir(string dirpath)
     
     newParentDir.file_name[0] = '.';
     newParentDir.file_name[1] = '.';
-    newParentDir.first_blk = cwb;
+    newParentDir.file_name[2] = '\0';
+    newParentDir.first_blk = directoryBlock;
     newParentDir.type = TYPE_DIR;
     newParentDir.access_rights = READ + WRITE;
 
-    this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
+    this->disk.write(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
     this->disk.write(FAT_BLOCK,reinterpret_cast<uint8_t*>(fat));
 
     dir_entry child_array[64] = {0};
