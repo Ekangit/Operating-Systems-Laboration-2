@@ -5,7 +5,7 @@
 
 using namespace std;
 
-int FS::getDirectoryBlock(string path, string &fileName)
+int FS::getDirectoryBlock(string path, string &fileName, int &typeofpath)
 {
     dir_entry directory_array[64] = {0};
 
@@ -55,6 +55,9 @@ int FS::getDirectoryBlock(string path, string &fileName)
                 path = "/"; 
             }
         }
+        else{
+            path = foldername;
+        }
         for(int i = 0; i < paths.size(); i++){
             bool founda = false;
             int k = 0;
@@ -94,6 +97,8 @@ int FS::getDirectoryBlock(string path, string &fileName)
             } else {
                 path = "/"; 
             }
+        }else{
+            path = foldername;
         }
         for(int i = 0; i < paths.size(); i++){
             bool foundr = false;
@@ -117,7 +122,7 @@ int FS::getDirectoryBlock(string path, string &fileName)
         this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
     }
 
-
+    typeofpath = inputtype;
     fileName = path;
     return directoryBlock;
 }
@@ -159,7 +164,16 @@ FS::create(string filepath)
 {
     cout << "FS::create(" << filepath << ")\n";
     dir_entry directory_array[64] = {0};
-    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+
+
+    string filename = "";
+    int typeofpath;
+    int directoryBlock = getDirectoryBlock(filepath,filename,typeofpath);
+    if(directoryBlock == -1){
+        return -1;
+    }
+
+    int resultr = this->disk.read(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
     int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
     
 
@@ -168,8 +182,8 @@ FS::create(string filepath)
     if(resultr == 0 && resultf == 0){
         for(int i = 0; i < 64; i++){
             if(directory_array[i].file_name[0] != '\0'){
-                if(directory_array[i].file_name == filepath){
-                    cout << "Create(" << filepath<< ") - ERROR: File already exists \n";
+                if(directory_array[i].file_name == filename){
+                    cout << "Create(" << filename<< ") - ERROR: File already exists \n";
                     return -1;
                 }  
             }
@@ -210,23 +224,23 @@ FS::create(string filepath)
 
         // Kolla att vi har plats i fat
         if(freeCount < blocksNeeded){
-            cout << "Create(" << filepath<< ") - ERROR: Not enough disk space \n";
+            cout << "Create(" << filename<< ") - ERROR: Not enough disk space \n";
             return -1;
         }
 
 
-        if(filepath.size() > 55){
-            cout << "Create(" << filepath<< ") - ERROR: Too long filename \n";
+        if(filename.size() > 55){
+            cout << "Create(" << filename<< ") - ERROR: Too long filename \n";
             return -1;
         }
 
         // Uppdatera struct
         newFile.access_rights = 6;
-        for(int i = 0; i <filepath.size(); i++){
-            newFile.file_name[i] = filepath[i];
+        for(int i = 0; i <filename.size(); i++){
+            newFile.file_name[i] = filename[i];
         }
-        if(filepath.size() != 55){
-            newFile.file_name[filepath.size()] = '\0';
+        if(filename.size() != 55){
+            newFile.file_name[filename.size()] = '\0';
         }
        
 
@@ -241,7 +255,7 @@ FS::create(string filepath)
         if(z < 64){
             directory_array[z] = newFile;
         }else{
-            cout << "Create(" << filepath<< ") - ERROR: Directory is full \n";
+            cout << "Create(" << filename<< ") - ERROR: Directory is full \n";
             return -1;
         }
 
@@ -272,7 +286,7 @@ FS::create(string filepath)
         
         
         // Skriv current directory och fat till disk
-        this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
+        this->disk.write(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
         this->disk.write(FAT_BLOCK,reinterpret_cast<uint8_t*>(fat));
 
     }else{
@@ -289,26 +303,37 @@ FS::cat(string filepath)
 {
     cout << "FS::cat(" << filepath << ")\n";
     dir_entry directory_array[64] = {0};
-    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+
+    int typeofpath;
+    string filename = "";
+    int directoryBlock = getDirectoryBlock(filepath,filename,typeofpath);
+    if(directoryBlock == -1){
+        return -1;
+    }
+
+    int resultr = this->disk.read(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
     int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
 
     int block = -1;
     int fileSize;
     // Hitta filen och ändra variabler
     for(int i = 0; i < 64; i++){
-        if(directory_array[i].file_name == filepath){
-            if(directory_array[i].type == TYPE_FILE){
-                block = directory_array[i].first_blk;
-                fileSize = directory_array[i].size;
-            }else{
-                cout << "Cat(" << filepath<< ") - ERROR: File is a directory  \n";
-                return -1;
+        if(directory_array[i].file_name[0] != '\0'){
+            if(directory_array[i].file_name == filename){
+                if(directory_array[i].type == TYPE_FILE){
+                    block = directory_array[i].first_blk;
+                    fileSize = directory_array[i].size;
+                }else{
+                    cout << "Cat(" << filename<< ") - ERROR: File is a directory  \n";
+                    return -1;
+                }
             }
         }
+
     }
 
     if(block == -1){
-        cout << "Cat(" << filepath<< ") - ERROR: File not in CD \n";
+        cout << "Cat(" << filename<< ") - ERROR: File not in CD \n";
         return -1;
     }
 
@@ -371,16 +396,30 @@ FS::cp(string sourcepath, string destpath)
 {
     cout << "FS::cp(" << sourcepath << "," << destpath << ")\n";
     dir_entry directory_array[64] = {0};
-    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
+
+
+    string sourcefilename = "";
+    int sourcetypeofpath;
+    int sourcedirectoryBlock = getDirectoryBlock(sourcepath,sourcefilename,sourcetypeofpath);
+    if(sourcedirectoryBlock == -1){
+        return -1;
+    }
+    string destfilename = "";
+    int desttypeofpath;
+    int destdirectoryBlock = getDirectoryBlock(destpath,destfilename,desttypeofpath);
+    if(destdirectoryBlock == -1){
+        return -1;
+    }
+    int resultr = this->disk.read(sourcedirectoryBlock,reinterpret_cast<uint8_t*>(directory_array));
     int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
 
-    if(destpath.size() > 55){
-        cout << "Create(" << destpath<< ") - ERROR: Too long filename \n";
+    if(destfilename.size() > 55){
+        cout << "Create(" << destfilename<< ") - ERROR: Too long filename \n";
         return -1;
     }
 
-    if(sourcepath == destpath){
-        cout << "FS::cp(" << sourcepath << "," << destpath << ") - Error same filename for source and copy\n";
+    if(sourcefilename == destfilename){
+        cout << "FS::cp(" << sourcefilename << "," << destfilename << ") - Error same filename for source and copy\n";
         return -1;
     }
 
@@ -395,10 +434,10 @@ FS::cp(string sourcepath, string destpath)
     dir_entry newFile = {0};
     for(int i = 0; i < 64; i++){
         if(directory_array[i].file_name[0] != '\0'){
-            if(directory_array[i].file_name == sourcepath){
+            if(directory_array[i].file_name == sourcefilename){
                 found = true;
                 if(directory_array[i].type == TYPE_DIR){
-                    cout << "FS::cp(" << sourcepath << "," << destpath << ") - Error Sourcepath is a directory\n";
+                    cout << "FS::cp(" << sourcefilename << "," << destfilename << ") - Error Sourcepath is a directory\n";
                     return -1;
                 }
                 
@@ -409,9 +448,20 @@ FS::cp(string sourcepath, string destpath)
                 firstBlock = directory_array[i].first_blk;
                 fileSize = directory_array[i].size;
             } 
-            if(directory_array[i].file_name == destpath){
+        }
+    }
+
+    //Kolla så att filen existerar
+    if(!found){
+        cout << "cp(" << sourcefilename << ") - ERROR: File not in CD \n";
+        return -1;
+    }
+    this->disk.read(destdirectoryBlock,reinterpret_cast<uint8_t*>(directory_array));
+    for(int i = 0; i < 64; i++){
+        if(directory_array[i].file_name[0] != '\0'){
+            if(directory_array[i].file_name == destfilename){
                 if(directory_array[i].type == TYPE_FILE){
-                    cout << "FS::cp(" << sourcepath << "," << destpath << ") - Error Copy filename already exists\n";
+                    cout << "FS::cp(" << sourcefilename << "," << destfilename << ") - Error Copy filename already exists\n";
                     return -1;
                 }else{
                     type = TYPE_DIR;
@@ -421,20 +471,15 @@ FS::cp(string sourcepath, string destpath)
             }
         }
     }
-
-    //Kolla så att filen existerar
-    if(!found){
-        cout << "cp(" << sourcepath << ") - ERROR: File not in CD \n";
-        return -1;
-    }
+        
 
     if(type == TYPE_FILE){
-        for(int j = 0; j < destpath.size(); j++){
-            newFile.file_name[j] = destpath[j];
+        for(int j = 0; j < destfilename.size(); j++){
+            newFile.file_name[j] = destfilename[j];
         }
     }else{
-        for(int j = 0; j < sourcepath.size(); j++){
-            newFile.file_name[j] = sourcepath[j];
+        for(int j = 0; j < sourcefilename.size(); j++){
+            newFile.file_name[j] = sourcefilename[j];
         }
         this->disk.read(destBlock,reinterpret_cast<uint8_t*>(directory_array));
     }
@@ -462,7 +507,7 @@ FS::cp(string sourcepath, string destpath)
 
     // Kolla att vi har plats i fat
     if(freeCount < blocksNeeded){
-        cout << "cp(" << destpath << ") - ERROR: Not enough disk space \n";
+        cout << "cp(" << destfilename << ") - ERROR: Not enough disk space \n";
         return -1;
     }
 
@@ -474,7 +519,7 @@ FS::cp(string sourcepath, string destpath)
     if(z < 64){
         directory_array[z] = newFile;
     }else{
-        cout << "cp(" << destpath<< ") - ERROR: Directory is full \n";
+        cout << "cp(" << destfilename<< ") - ERROR: Directory is full \n";
         return -1;
     }
 
@@ -502,7 +547,7 @@ FS::cp(string sourcepath, string destpath)
     }
 
     if(type == TYPE_FILE){
-        this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
+        this->disk.write(sourcedirectoryBlock,reinterpret_cast<uint8_t*>(directory_array));
     }else{
         this->disk.write(destBlock,reinterpret_cast<uint8_t*>(directory_array));
     }   
@@ -519,10 +564,25 @@ FS::mv(string sourcepath, string destpath)
 {
     cout << "FS::mv(" << sourcepath << "," << destpath << ")\n";
     dir_entry directory_array[64] = {0};
-    int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
 
-    if(destpath.size() > 55){
-        cout << "Create(" << destpath<< ") - ERROR: Too long filename \n";
+
+    string sourcefilename = "";
+    int sourcetypeofpath;
+    int sourcedirectoryBlock = getDirectoryBlock(sourcepath,sourcefilename,sourcetypeofpath);
+    if(sourcedirectoryBlock == -1){
+        return -1;
+    }
+    int desttypeofpath;
+    string destfilename = "";
+    int destdirectoryBlock = getDirectoryBlock(destpath,destfilename,desttypeofpath);
+    if(destdirectoryBlock == -1){
+        return -1;
+    }
+
+    int resultr = this->disk.read(sourcedirectoryBlock,reinterpret_cast<uint8_t*>(directory_array));
+
+    if(destfilename.size() > 55){
+        cout << "Create(" << destfilename<< ") - ERROR: Too long filename \n";
         return -1;
     }
 
@@ -530,7 +590,7 @@ FS::mv(string sourcepath, string destpath)
         return -1;
     }
 
-    if(sourcepath == destpath){
+    if(sourcefilename == destfilename){
         return 0;
     }
 
@@ -538,51 +598,70 @@ FS::mv(string sourcepath, string destpath)
     int destBlock;
     bool found = false;
     int sourceIndex;
+    dir_entry copy = {0};
     for(int i = 0; i < 64; i++){
         if(directory_array[i].file_name[0] != '\0'){
-            if(directory_array[i].file_name == sourcepath){
+            if(directory_array[i].file_name == sourcefilename){
                 found = true;
                 sourceIndex = i;
+                
+                copy = directory_array[sourceIndex];
             } 
-            if(directory_array[i].file_name == destpath){
+
+        }
+    }
+
+    //Kolla så att filen existerar
+    if(!found){
+        cout << "mv(" << sourcefilename << ") - ERROR: File not in CD \n";
+        return -1;
+    }
+
+    this->disk.read(destdirectoryBlock,reinterpret_cast<uint8_t*>(directory_array));
+    bool founddest = false;
+    for(int i = 0; i < 64; i++){
+        if(directory_array[i].file_name[0] != '\0'){
+            if(directory_array[i].file_name == destfilename){
                 if(directory_array[i].type == TYPE_FILE){
-                    cout << "FS::mv(" << sourcepath << "," << destpath << ") - Error Copy filename already exists\n";
+                    cout << "FS::mv(" << sourcefilename << "," << destfilename << ") - Error Copy filename already exists\n";
                     return -1;
                 }else{
                     type = TYPE_DIR;
+                    founddest = true;
                     destBlock = directory_array[i].first_blk;
                 }
                 
             }
         }
     }
+    this->disk.read(sourcedirectoryBlock,reinterpret_cast<uint8_t*>(directory_array));
 
-    //Kolla så att filen existerar
-    if(!found){
-        cout << "mv(" << sourcepath << ") - ERROR: File not in CD \n";
+    if((desttypeofpath == 1 || desttypeofpath == 2) && !founddest){
+        cout << "mv(" << sourcefilename << ") - ERROR: Directory does not exist \n";
         return -1;
     }
-
+    
     if(type == TYPE_FILE){
+        
+
         // Nollställ namnet
         for(int k = 0; k < 56; k++) {
             directory_array[sourceIndex].file_name[k] = '\0';
         }
 
         // Ändra namnet
-        for(int j = 0; j < destpath.size(); j++){
-            directory_array[sourceIndex].file_name[j] = destpath[j];
+        for(int j = 0; j < destfilename.size(); j++){
+            directory_array[sourceIndex].file_name[j] = destfilename[j];
         }
         
 
-        this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
+        this->disk.write(sourcedirectoryBlock,reinterpret_cast<uint8_t*>(directory_array));
     }else{
-        dir_entry copy = {0};
+        
         dir_entry dest_array[64] = {0};
-        copy = directory_array[sourceIndex];
         // Nollställer dir_entry-structen
         memset(&directory_array[sourceIndex], 0, sizeof(dir_entry));
-        this->disk.write(cwb,reinterpret_cast<uint8_t*>(directory_array));
+        this->disk.write(sourcedirectoryBlock,reinterpret_cast<uint8_t*>(directory_array));
         this->disk.read(destBlock,reinterpret_cast<uint8_t*>(dest_array));
 
         int z = 0;
@@ -592,7 +671,7 @@ FS::mv(string sourcepath, string destpath)
         if(z < 64){
             dest_array[z] = copy;
         }else{
-            cout << "mv(" << destpath<< ") - ERROR: Directory is full \n";
+            cout << "mv(" << destfilename<< ") - ERROR: Directory is full \n";
             return -1;
         }
         this->disk.write(destBlock,reinterpret_cast<uint8_t*>(dest_array));

@@ -34,7 +34,7 @@ private:
     int16_t fat[BLOCK_SIZE/2];
     string cwd;
     int cwb;
-    int getDirectoryBlock(string path, string &fileName);
+    int getDirectoryBlock(string path, string &fileName, int &typeofpath);
     
 
 public:
