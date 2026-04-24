@@ -729,6 +729,7 @@ FS::cd(string dirpath)
 {
     cout << "FS::cd(" << dirpath << ")\n";
 
+
     dir_entry directory_array[64] = {0};
     int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
     int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
@@ -766,6 +767,38 @@ int
 FS::pwd()
 {
     cout << "FS::pwd()\n";
+    dir_entry directory_array[64] = {0};
+    string fullpath = "";    
+    dir_entry parent_array[64] = {0};
+    int parentblock = cwb;
+    int directoryblock = cwb;
+    vector<string> paths;
+    if(parentblock == ROOT_BLOCK){
+        fullpath = "/";
+    }
+    this->disk.read(directoryblock,reinterpret_cast<uint8_t*>(directory_array));
+    while(parentblock != ROOT_BLOCK){
+        directoryblock = parentblock;
+        this->disk.read(directoryblock,reinterpret_cast<uint8_t*>(directory_array));
+        parentblock = directory_array[0].first_blk;
+        this->disk.read(parentblock,reinterpret_cast<uint8_t*>(parent_array));
+        for(int i = 0; i < 64; i++){
+            if(parent_array[i].first_blk == directoryblock){
+                int index = 0;
+                string partpath = "/";
+                while(parent_array[i].file_name[index] != '\0'){
+                    partpath += parent_array[i].file_name[index];
+                    index++;
+                }
+                paths.push_back(partpath);
+            }
+        }
+    }
+
+    for(int i = paths.size() -1; i >= 0; i--){
+        fullpath += paths[i];
+    }
+    cout << fullpath << endl;
     return 0;
 }
 
