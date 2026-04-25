@@ -320,6 +320,17 @@ FS::cat(string filepath)
     for(int i = 0; i < 64; i++){
         if(directory_array[i].file_name[0] != '\0'){
             if(directory_array[i].file_name == filename){
+                if(directory_array[i].access_rights == 1){
+                    cout << "FS::cat(" << filepath << ") - ERROR: File does not have READ rights\n";
+                    return -1;
+                }else if(directory_array[i].access_rights == 2){
+                    cout << "FS::cat(" << filepath << ") - ERROR: File does not have READ rights\n";
+                    return -1;
+                }
+                else if(directory_array[i].access_rights == 3){
+                    cout << "FS::cat(" << filepath << ") - ERROR: File does not have READ rights\n";
+                    return -1;
+                }
                 if(directory_array[i].type == TYPE_FILE){
                     block = directory_array[i].first_blk;
                     fileSize = directory_array[i].size;
@@ -371,17 +382,38 @@ FS::ls()
     int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
     int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
 
-    cout << "name\t type \tsize"  << endl;
+    cout << "name \t type \t accessrights \t size"  << endl;
 
     for(int i = 0; i < 64; i++){
         if(directory_array[i].file_name[0] != '\0'){
             string type = "";
+            string rights = "";
             if(directory_array[i].type == TYPE_FILE){
                 type = "file";
             }else{
                 type = "dir";
             }
-            cout << directory_array[i].file_name << "\t " << type << "\t" << directory_array[i].size << endl;
+            if(directory_array[i].access_rights == 1){
+                rights = "--x";
+            }else if(directory_array[i].access_rights == 2){
+                rights = "-w-";
+            }
+            else if(directory_array[i].access_rights == 4){
+                rights = "r--";
+            }
+            else if(directory_array[i].access_rights == 3){
+                rights = "-wx";
+            }
+            else if(directory_array[i].access_rights == 5){
+                rights = "r-x";
+            }
+            else if(directory_array[i].access_rights == 6){
+                rights = "rw-";
+            }
+            else if(directory_array[i].access_rights == 7){
+                rights = "rwx";
+            }
+            cout << directory_array[i].file_name << "\t " << type << "\t " << rights << "\t\t " << directory_array[i].size << endl;
         }
     }
 
@@ -808,6 +840,17 @@ FS::append(string filepath1, string filepath2)
     for(int i = 0; i < 64; i++){
         if(directory_array[i].file_name[0] != '\0'){
             if(directory_array[i].file_name == filename1){
+                if(directory_array[i].access_rights == 1){
+                    cout << "FS::append(" << filename1 << ") - ERROR: File does not have READ rights\n";
+                    return -1;
+                }else if(directory_array[i].access_rights == 2){
+                    cout << "FS::append(" << filename1 << ") - ERROR: File does not have READ rights\n";
+                    return -1;
+                }
+                else if(directory_array[i].access_rights == 3){
+                    cout << "FS::append(" << filename1 << ") - ERROR: File does not have READ rights\n";
+                    return -1;
+                }
                 if(directory_array[i].type == TYPE_DIR){
                     cout << "append(" << filename1 << filename2 << ") - ERROR: File is a directory \n";
                     return -1;
@@ -824,6 +867,17 @@ FS::append(string filepath1, string filepath2)
     for(int i = 0; i < 64; i++){
         if(directory_array[i].file_name[0] != '\0'){
             if(directory_array[i].file_name == filename2){
+                if(directory_array[i].access_rights == 1){
+                    cout << "FS::append(" << filename2 << ") - ERROR: File does not have WRITE rights\n";
+                    return -1;
+                }else if(directory_array[i].access_rights == 4){
+                    cout << "FS::append(" << filename2 << ") - ERROR: File does not have WRITE rights\n";
+                    return -1;
+                }
+                else if(directory_array[i].access_rights == 5){
+                    cout << "FS::append(" << filename2 << ") - ERROR: File does not have WRITE rights\n";
+                    return -1;
+                }
                 if(directory_array[i].type == TYPE_DIR){
                     cout << "append(" << filename1 << filename2 << ") - ERROR: File is a directory \n";
                     return -1;
