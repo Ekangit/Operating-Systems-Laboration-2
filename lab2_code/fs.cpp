@@ -1348,5 +1348,35 @@ int
 FS::chmod(string accessrights, string filepath)
 {
     cout << "FS::chmod(" << accessrights << "," << filepath << ")\n";
+    dir_entry directory_array[64] = {0};
+
+    int rights =  stoi(accessrights);
+
+    int typeofpath;
+    string filename = "";
+    int directoryBlock = getDirectoryBlock(filepath,filename,typeofpath);
+    if(directoryBlock == -1){
+        return -1;
+    }
+
+    this->disk.read(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
+
+    bool found = false;
+    for(int i = 0; i < 64; i++){
+        if(directory_array[i].file_name[0] != '\0'){
+            if(directory_array[i].file_name == filename){
+                found = true;
+                directory_array[i].access_rights = rights;
+            }
+        }
+    }
+
+    if(!found){
+        cout << "FS::chmod(" << accessrights << "," << filepath << ") - Error file not found\n";
+        return -1;
+    }
+
+    this->disk.write(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
+
     return 0;
 }
