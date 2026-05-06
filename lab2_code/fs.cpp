@@ -141,7 +141,7 @@ FS::~FS()
 int
 FS::format()
 {
-    cout << "FS::format()\n";
+    
     this->fat[ROOT_BLOCK] = FAT_EOF;
     this->fat[FAT_BLOCK] = FAT_EOF;
     for(int i = 2; i < this->disk.get_no_blocks(); i++){
@@ -162,7 +162,7 @@ FS::format()
 int
 FS::create(string filepath)
 {
-    cout << "FS::create(" << filepath << ")\n";
+    
     dir_entry directory_array[64] = {0};
 
 
@@ -301,7 +301,7 @@ FS::create(string filepath)
 int
 FS::cat(string filepath)
 {
-    cout << "FS::cat(" << filepath << ")\n";
+    
     dir_entry directory_array[64] = {0};
 
     int typeofpath;
@@ -377,7 +377,7 @@ FS::cat(string filepath)
 int
 FS::ls()
 {
-    cout << "FS::ls()\n";
+    
     dir_entry directory_array[64] = {0};
     int resultr = this->disk.read(cwb,reinterpret_cast<uint8_t*>(directory_array));
     int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
@@ -399,7 +399,7 @@ FS::ls()
                 rights = "-w-";
             }
             else if(directory_array[i].access_rights == 4){
-                rights = "r--";
+                rights = "r-";
             }
             else if(directory_array[i].access_rights == 3){
                 rights = "-wx";
@@ -413,7 +413,51 @@ FS::ls()
             else if(directory_array[i].access_rights == 7){
                 rights = "rwx";
             }
-            cout << directory_array[i].file_name << "\t " << type << "\t " << rights << "\t\t " << directory_array[i].size << endl;
+            
+            if(directory_array[i].type == TYPE_DIR){
+                if(directory_array[i].size != -1){
+                    cout << directory_array[i].file_name << "\t " << type << "\t " << rights << "\t\t " << "-" << endl;
+                }
+                    
+            }
+            
+        }
+    }
+
+    for(int i = 0; i < 64; i++){
+        if(directory_array[i].file_name[0] != '\0'){
+            string type = "";
+            string rights = "";
+            if(directory_array[i].type == TYPE_FILE){
+                type = "file";
+            }else{
+                type = "dir";
+            }
+            if(directory_array[i].access_rights == 1){
+                rights = "--x";
+            }else if(directory_array[i].access_rights == 2){
+                rights = "-w-";
+            }
+            else if(directory_array[i].access_rights == 4){
+                rights = "r-";
+            }
+            else if(directory_array[i].access_rights == 3){
+                rights = "-wx";
+            }
+            else if(directory_array[i].access_rights == 5){
+                rights = "r-x";
+            }
+            else if(directory_array[i].access_rights == 6){
+                rights = "rw-";
+            }
+            else if(directory_array[i].access_rights == 7){
+                rights = "rwx";
+            }
+      
+            if(directory_array[i].type == TYPE_FILE){
+                cout << directory_array[i].file_name << "\t " << type << "\t " << rights << "\t\t " << directory_array[i].size << endl;
+            }
+            
         }
     }
 
@@ -426,7 +470,7 @@ FS::ls()
 int
 FS::cp(string sourcepath, string destpath)
 {
-    cout << "FS::cp(" << sourcepath << "," << destpath << ")\n";
+    
     dir_entry directory_array[64] = {0};
 
 
@@ -594,7 +638,6 @@ FS::cp(string sourcepath, string destpath)
 int
 FS::mv(string sourcepath, string destpath)
 {
-    cout << "FS::mv(" << sourcepath << "," << destpath << ")\n";
     dir_entry directory_array[64] = {0};
 
 
@@ -716,7 +759,7 @@ FS::mv(string sourcepath, string destpath)
 int
 FS::rm(string filepath)
 {
-    cout << "FS::rm(" << filepath << ")\n";
+
     dir_entry directory_array[64] = {0};
 
     string filename = "";
@@ -805,7 +848,7 @@ FS::rm(string filepath)
 int
 FS::append(string filepath1, string filepath2)
 {
-    cout << "FS::append(" << filepath1 << "," << filepath2 << ")\n";
+    
     dir_entry directory_array[64] = {0};
 
     string filename1 = "";
@@ -1019,7 +1062,6 @@ FS::append(string filepath1, string filepath2)
 int
 FS::mkdir(string dirpath)
 {
-    cout << "FS::mkdir(" << dirpath << ")\n";
 
     dir_entry directory_array[64] = {0};
     int resultf = this->disk.read(FAT_BLOCK,reinterpret_cast<uint8_t*>(this->fat));
@@ -1130,7 +1172,7 @@ FS::mkdir(string dirpath)
     // Gå igenom current directory och kolla om filnamnet existerar och om det finns plats för nya directory
     int freeDirectoryIndex;
     bool first = true;
-    int parentindex = -1;
+    int parentindex = -1; // Unnecessary
     dir_entry newDir = {0};
     dir_entry newParentDir = {0};
     for(int i = 0; i < 64; i++){
@@ -1139,7 +1181,7 @@ FS::mkdir(string dirpath)
                 cout << "FS::mkdir(" << dirpath << ") - ERROR: Directory name already exists\n";
                 return -1;
             }else if(directory_array[i].file_name == ".."){
-                parentindex = i;
+                parentindex = i; // Unnecessary
             }
         }else{
             if(first){
@@ -1196,6 +1238,7 @@ FS::mkdir(string dirpath)
     newParentDir.file_name[2] = '\0';
     newParentDir.first_blk = directoryBlock;
     newParentDir.type = TYPE_DIR;
+    newParentDir.size = -1;
     newParentDir.access_rights = READ + WRITE;
 
     this->disk.write(directoryBlock,reinterpret_cast<uint8_t*>(directory_array));
@@ -1213,7 +1256,7 @@ FS::mkdir(string dirpath)
 int
 FS::cd(string dirpath)
 {
-    cout << "FS::cd(" << dirpath << ")\n";
+    
 
 
     dir_entry directory_array[64] = {0};
@@ -1360,7 +1403,7 @@ FS::cd(string dirpath)
 int
 FS::pwd()
 {
-    cout << "FS::pwd()\n";
+    
     dir_entry directory_array[64] = {0};
     string fullpath = "";    
     dir_entry parent_array[64] = {0};
@@ -1401,7 +1444,7 @@ FS::pwd()
 int
 FS::chmod(string accessrights, string filepath)
 {
-    cout << "FS::chmod(" << accessrights << "," << filepath << ")\n";
+    
     dir_entry directory_array[64] = {0};
 
     int rights =  stoi(accessrights);
